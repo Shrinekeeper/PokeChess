@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Minimal Pokemon Chess</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --light: #e5e7eb;
+      --dark: #9ca3af;
+      --accent: #38bdf8;
+      --move: #a5f3fc;
+      --capture: #fecaca;
+      --select: #93c5fd;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: #e5e7eb;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    .wrap {
+      display: grid;
+      place-items: center;
+      min-height: 100%;
+      padding: 24px;
+    }
+    .app {
+      width: min(96vw, 1200px);
+      display: grid;
+      grid-template-columns: 340px 560px 1fr; /* info | board | spacer */
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 1000px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+      #board { grid-column: auto; justify-self: center; }
+      #info { grid-column: auto; }
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 16px 16px 20px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      letter-spacing: 0.3px;
+    }
+    .status {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      gap: 12px;
+    }
+    .pill {
+      background: #0b1220;
+      border: 1px solid #243145;
+      border-radius: 999px;
+      padding: 6px 12px;
+      color: #cbd5e1;
+      font-size: 14px;
+    }
+    button {
+      background: #0ea5e9;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:active { transform: translateY(1px); }
+
+    /* Board */
+    #board {
+      grid-column: 2;
+      justify-self: center;
+      width: 560px; /* 8 * 70 */
+      height: 560px;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #1f2937;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      background: linear-gradient(180deg, #0b1220 0%, #0b1220 100%);
+    }
+    #info { grid-column: 1; position: sticky; top: 24px; }
+
+    .sq {
+      position: relative;
+      width: 70px;
+      height: 70px;
+      display: grid;
+      place-items: center;
+      user-select: none;
+      cursor: pointer;
+      transition: background-color 120ms ease;
+    }
+    .sq.light { background: #0e1626; }
+    .sq.dark { background: #0a1220; }
+    .sq.selected { outline: 2px solid var(--select); outline-offset: -2px; }
+
+    /* Center dots for move / capture */
+    .sq.move::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 18px;
+      height: 18px;
+      transform: translate(-50%, -50%);
+      background: var(--move);
+      border-radius: 50%;
+      opacity: 0.95;
+      box-shadow: 0 0 8px rgba(165, 243, 252, 0.6);
+    }
+    .sq.capture::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 38px;
+      height: 38px;
+      transform: translate(-50%, -50%);
+      border: 3px solid var(--capture);
+      border-radius: 50%;
+      background: transparent;
+      box-shadow: 0 0 10px rgba(254, 202, 202, 0.5);
+    }
+
+    .piece {
+      width: 56px;
+      height: 56px;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5));
+      transition: transform 100ms ease;
+      z-index: 1;
+    }
+    .sq:hover .piece { transform: translateY(-2px); }
+
+    /* Pawn tint */
+    .pawn-tint-white { filter: brightness(0) invert(1) drop-shadow(0 2px 2px rgba(0,0,0,0.5)); }
+    .pawn-tint-black { filter: grayscale(1) brightness(1.35) contrast(1.25) drop-shadow(0 2px 2px rgba(0,0,0,0.7)); }
+
+    /* Crowns over kings */
+    .crown {
+      position: absolute;
+      top: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 16px;
+      line-height: 1;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .crown.white { color: #fff; text-shadow: 0 1px 0 #000, 0 -1px 0 #000, 1px 0 0 #000, -1px 0 0 #000; }
+    .crown.black { color: #000; text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff; }
+
+    .legend { font-size: 13px; color: #9ca3af; line-height: 1.5; }
+    .legend code { background: #0b1220; padding: 2px 6px; border-radius: 6px; border: 1px solid #243145; }
+
+    /* Modal for check / checkmate */
+    .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); z-index: 9999; }
+    .modal .box { background: #111827; border: 1px solid #243145; border-radius: 12px; padding: 16px 20px; font-size: 18px; color: #e5e7eb; min-width: 260px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="app">
+      <div id="info" class="panel">
+        <h1>Minimal Pokémon Chess</h1>
+        <div class="status">
+          <div id="turn" class="pill">Turn: White</div>
+          <div style="display:flex; gap:8px;">
+            <button id="reset">Reset</button>
+          </div>
+        </div>
+        <div class="legend">
+          Pokémon sprites for pieces. Rules: legal-move validation, captures, en passant, pawn promotion to queen, and check/checkmate popups. No castling yet.
+        </div>
+      </div>
+      <div id="board" class="panel" aria-label="Chess board"></div>
+    </div>
+  </div>
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-live="assertive" aria-label="Game message">
+    <div class="box" id="modalText">Message</div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
